@@ -1,6 +1,22 @@
 DIRADM CHANGES
 ==============
 
+2003-07-14  Daniel Himler  <dan@hits.at>
+
+	* Added the useradd specific variable USERGROUPS to the config file,
+	  which is used to create a group with the same name as the new user
+	  (and, if not already assigned, the same ID number). This variable
+	  defines the default value, which can be overridden by passing the
+	  option "-n" to the useradd command. The variable also enables
+	  userdel to remove user groups if no members exist.
+
+	* groupdel now verifies that the group to be removed is not some
+	  user's primary group.
+
+	* Fixed useradd and groupadd not respecting their max ID values.
+
+	* Updated version number to 1.2.
+
 2003-06-22  Daniel Himler  <dan@hits.at>
 
 	* Command line arguments now get parsed using bash's internal getopts

@@ -5,7 +5,7 @@
 # diradm:	A tool for managing posix users and groups in a LDAP directory.
 #		It uses ldap[add|modify|delete] from the OpenLDAP project.
 #
-# Version:	1.1
+# Version:	1.2
 #
 # Copyright (C) 2003  Daniel Himler  <dan@hits.at>
 #
@@ -29,7 +29,7 @@ CONFIG="/etc/diradm.conf"
 
 ##################### Don't touch anything below this line #####################
 
-VERSION="1.1"
+VERSION="1.2"
 
 if [ ! -r "$CONFIG" ]; then
 	echo "Unable to open configuration file \"$CONFIG\"!"
@@ -115,7 +115,7 @@ LDAPMODIFY="ldapmodify $ADMINOPTIONS"
 LDAPDELETE="ldapdelete $ADMINOPTIONS"
 
 print_usage () {
-	echo "Usage: diradm useradd [-u uid [-o]] [-g group] [-G group,...] [-h hosts]"
+	echo "Usage: diradm useradd [-u uid [-o]] [-n] [-g group] [-G group,...] [-h hosts]"
 	echo "                      [-d home] [-s shell] [-c comment] [-m [-k template]]"
 	echo "                      [-f inactive] [-e expire] [-p passwd] name"
 	echo
@@ -154,10 +154,11 @@ search_group () {
 }
 
 useradd () {
-	while getopts "u:og:G:h:d:s:c:mk:f:e:p:" OPTION; do
+	while getopts "u:ong:G:h:d:s:c:mk:f:e:p:" OPTION; do
 		case "$OPTION" in
 			u) UIDNUMBER="$OPTARG";;
 			o) DUPLICATES="yes";;
+			n) SWITCHUSERGROUPS="yes";;
 			g) GID="$OPTARG";;
 			G) OTHERGROUPS="$OPTARG";;
 			h) HOSTLIST="$OPTARG";;
@@ -208,6 +209,20 @@ useradd () {
 			[ "$?" -ne 0 ] && break
 			let UIDNUMBER="$UIDNUMBER + 1"
 		done
+		if [ "$UIDNUMBER" -gt "$UIDNUMBERMAX" ]; then
+			echo "useradd: Can't get unique uid"
+			exit 4
+		fi
+	fi
+	if [ "$SWITCHUSERGROUPS" = "yes" ]; then
+		case "$USERGROUPS" in
+			[Yy]*)
+				USERGROUPS="no"
+				;;
+			*)
+				USERGROUPS="yes"
+				;;
+		esac
 	fi
 	if [ -n "$GID" ]; then
 		echo "$GID" | grep -qs "^[[:digit:]]*$"
@@ -221,11 +236,31 @@ useradd () {
 			fi
 		fi
 	else
-		GIDNUMBER="$DEFAULT_GIDNUMBER"
+		case "$USERGROUPS" in
+			[Yy]*)
+				search_group "cn" "$LOGIN"
+				if [ "$?" -eq 0 ]; then
+					echo "useradd: Group \"$LOGIN\" exists - if you want to add this user to that group, use -g."
+					exit 9
+				fi
+				GIDNUMBER="$UIDNUMBER"
+				while [ "$GIDNUMBER" -le "$GIDNUMBERMAX" ]; do
+					search_group "gidNumber" "$GIDNUMBER"
+					[ "$?" -ne 0 ] && break
+					let GIDNUMBER="$GIDNUMBER + 1"
+				done
+				CREATEGROUP="yes"
+				;;
+			*)
+				GIDNUMBER="$DEFAULT_GIDNUMBER"
+				;;
+		esac
 	fi
-	search_group "gidNumber" "$GIDNUMBER"
-	if [ "$?" -ne 0 ]; then
-		echo "useradd: Warning! Group $GIDNUMBER not found. Adding user anyway."
+	if [ "$CREATEGROUP" != "yes" ]; then
+		search_group "gidNumber" "$GIDNUMBER"
+		if [ "$?" -ne 0 ]; then
+			echo "useradd: Warning! Group $GIDNUMBER not found. Adding user anyway."
+		fi
 	fi
 	if [ -n "$OTHERGROUPS" ]; then
 		OTHERGROUPS="$(echo "$OTHERGROUPS" | sed "s/,/ /")"
@@ -322,6 +357,13 @@ shadowMax: $SHADOWMAX
 shadowWarning: $SHADOWWARNING
 shadowFlag: $SHADOWFLAG
 $HOSTS
+EOF
+	[ "$CREATEGROUP" = "yes" ] && cat << EOF
+dn: cn=$LOGIN,$GROUPBASE
+objectClass: top
+objectClass: posixGroup
+cn: $LOGIN
+gidNumber: $GIDNUMBER
 EOF
 	) | $LDAPADD > /dev/null
 	if [ -n "$ADDTOGROUPS" ]; then
@@ -574,6 +616,17 @@ userdel () {
 			sed "s/^uidNumber: //")"
 	fi
 	COMMAND="dn: uid=$LOGIN,$USERBASE\nchangetype: delete\n"
+	case "$USERGROUPS" in
+		[Yy]*)
+			search_group "cn" "$LOGIN"
+			if [ "$?" -eq 0 ]; then
+				$LDAPSEARCH -b "$GROUPBASE" "cn=$LOGIN" | grep -qs "^memberUid:"
+				if [ "$?" -ne 0 ]; then
+					COMMAND="$COMMAND\ndn: cn=$LOGIN,$GROUPBASE\nchangetype: delete\n"
+				fi
+			fi
+			;;
+	esac
 	DELETEFROMGROUPS="$($LDAPSEARCH -b "$GROUPBASE" "memberUid=$LOGIN" | grep "^cn:" | sed "s/^cn: //")"
 	for POSIXGROUP in $DELETEFROMGROUPS; do
 		COMMAND="$COMMAND\ndn: cn=$POSIXGROUP,$GROUPBASE\ndelete: memberUid\nmemberUid: $LOGIN\n"
@@ -636,6 +689,10 @@ groupadd () {
 			[ "$?" -ne 0 ] && break
 			let GIDNUMBER="$GIDNUMBER + 1"
 		done
+		if [ "$GIDNUMBER" -gt "$GIDNUMBERMAX" ]; then
+			echo "groupadd: Can't get unique gid"
+			exit 4
+		fi
 	fi
 	(
 	cat << EOF
@@ -714,6 +771,12 @@ groupdel () {
 	if [ "$?" -ne 0 ]; then
 		echo "groupdel: Group \"$CN\" does not exist"
 		exit 6
+	fi
+	GIDNUMBER="$($LDAPSEARCH -b "$GROUPBASE" "cn=$CN" | grep "^gidNumber:" | sed "s/^gidNumber: //")"
+	search_user "gidNumber" "$GIDNUMBER"
+	if [ "$?" -eq 0 ]; then
+		echo "groupdel: Cannot remove user's primary group."
+		exit 8
 	fi
 	$LDAPDELETE "cn=$CN,$GROUPBASE" > /dev/null
 }

@@ -35,10 +35,16 @@ E.g. "diradm useradd -m -c "Testuser" -g group1 -G group2,group3 testusr"
 For further information on these command line options please take a look
 at the man pages of useradd/usermod/userdel & groupadd/groupmod/groupdel.
 
-The only additional parameter in comparison to the traditional password
-tools is "-h", which you can use to set the "host" attribute of a user.
-This attribute can be used by pam_ldap to determine wether the user has
-access to the system. The usage is the same as for "-G" (groups).
+The are two additional parameters in comparison to the traditional passwd
+tools. One of them is "-h", which you can use to set the "host" attribute
+of a user. This attribute can be used by pam_ldap to determine wether the
+user has access to a system. The usage is the same as for "-G" (groups).
+The other one is "-n" (only for useradd), which reverses the value of the
+variable USERGROUPS in the configuration file. If this variable is set to
+"yes", a group with the same name as the user (and, if possible, same ID
+number) will be created by useradd. The variable also enables userdel to
+remove user groups if no members exist. If USERGROUPS is unset, "no" is
+assumed.
 
 
 Bug reports
