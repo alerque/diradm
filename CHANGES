@@ -1,3 +1,38 @@
+DIRADM CHANGES
+==============
+
+2003-06-22  Daniel Himler  <dan@hits.at>
+
+	* Command line arguments now get parsed using bash's internal getopts
+	  construct, replacing the obsolete and less powerful getopt external
+	  command.
+
+	* Modifying multiple attributes of a user at once should now work.
+
+	* diradm doesn't check for the existence of the primary group anymore
+	  when modifying a user without actually changing the group attribute.
+	  Also fixed typo "Adding user anyway." in this warning message.
+
+	* Added usermod option "-h" to modify the host attribute for a user.
+
+	* Added option "--version" to display version information.
+
+	* Added option "--help" to display the usage with exit status 0.
+
+	* Updated version number to 1.1.
+
+
+2003-06-17  Andreas de Pretis  <andreas@depretis.at>
+
+	* Added useradd option "-h" to set the host attribute for a user.
+
+	* diradm now checks for existence of a home directory before trying to
+	  create it.
+
+	* diradm now checks the ownership of a home directory before removing
+	  it. A home directory not owned by the user won't get deleted anymore.
+
+
 2003-06-15  Daniel Himler  <dan@hits.at>
 
 	* Release of initial version 1.0.

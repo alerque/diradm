@@ -5,7 +5,7 @@
 # diradm:	A tool for managing posix users and groups in a LDAP directory.
 #		It uses ldap[add|modify|delete] from the OpenLDAP project.
 #
-# Version:	1.0
+# Version:	1.1
 #
 # Copyright (C) 2003  Daniel Himler  <dan@hits.at>
 #
@@ -29,12 +29,14 @@ CONFIG="/etc/diradm.conf"
 
 ##################### Don't touch anything below this line #####################
 
+VERSION="1.1"
+
 if [ ! -r "$CONFIG" ]; then
 	echo "Unable to open configuration file \"$CONFIG\"!"
 	exit 1
 fi
 
-DEPENDENCIES="getopt grep ldapsearch ldapadd ldapmodify ldapdelete sed"
+DEPENDENCIES="grep ldapsearch ldapadd ldapmodify ldapdelete sed stat"
 for DEPENDENCY in $DEPENDENCIES; do
 	EXECUTABLE="$(which "$DEPENDENCY" 2> /dev/null)"
 	if [ ! -x "$EXECUTABLE" ]; then
@@ -113,11 +115,11 @@ LDAPMODIFY="ldapmodify $ADMINOPTIONS"
 LDAPDELETE="ldapdelete $ADMINOPTIONS"
 
 print_usage () {
-	echo "Usage: diradm useradd [-u uid [-o]] [-g group] [-G group,...]"
+	echo "Usage: diradm useradd [-u uid [-o]] [-g group] [-G group,...] [-h hosts]"
 	echo "                      [-d home] [-s shell] [-c comment] [-m [-k template]]"
 	echo "                      [-f inactive] [-e expire] [-p passwd] name"
 	echo
-	echo "       diradm usermod [-u uid [-o]] [-g group] [-G group,...]"
+	echo "       diradm usermod [-u uid [-o]] [-g group] [-G group,...] [-h hosts]"
 	echo "                      [-d home [-m]] [-s shell] [-c comment] [-l new_name]"
 	echo "                      [-f inactive] [-e expire ] [-p passwd] [-L|-U] name"
 	echo
@@ -128,6 +130,17 @@ print_usage () {
 	echo "       diradm groupmod [-g gid [-o]] [-n name] group"
 	echo
 	echo "       diradm groupdel group"
+	echo
+	echo "       diradm --version   Print diradm version number, then exit"
+	echo
+	echo "       diradm --help      Print this help, then exit"
+}
+
+print_version () {
+	echo "diradm $VERSION"
+	echo "Copyright (C) 2003 Daniel Himler <dan@hits.at>"
+	echo "This is free software; see the source for copying conditions.  There is NO"
+	echo "warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE."
 }
 
 search_user () {
@@ -141,27 +154,25 @@ search_group () {
 }
 
 useradd () {
-	TEMP="$(getopt -o u:og:G:d:s:c:mk:f:e:p: -n useradd -- "$@")"
-	[ "$?" -ne 0 ] && exit 1
-	eval set -- "$TEMP"
-	while true; do
-		case "$1" in
-			-u) UIDNUMBER="$2"; shift 2;;
-			-o) DUPLICATES="yes"; shift;;
-			-g) GID="$2"; shift 2;;
-			-G) OTHERGROUPS="$2"; shift 2;;
-			-d) HOMEDIRECTORY="$2"; shift 2;;
-			-s) LOGINSHELL="$2"; shift 2;;
-			-c) COMMENT="$2"; shift 2;;
-			-m) CREATEHOMEDIR="yes"; shift;;
-			-k) SKEL="$2"; shift 2;;
-			-f) SHADOWINACTIVE="$2"; shift 2;;
-			-e) SHADOWEXPIRE="$2"; shift 2;;
-			-p) USERPASSWORD="$2"; shift 2;;
-			--) shift; break;;
-			*) echo "Internal error!"; exit 1;;
+	while getopts "u:og:G:h:d:s:c:mk:f:e:p:" OPTION; do
+		case "$OPTION" in
+			u) UIDNUMBER="$OPTARG";;
+			o) DUPLICATES="yes";;
+			g) GID="$OPTARG";;
+			G) OTHERGROUPS="$OPTARG";;
+			h) HOSTLIST="$OPTARG";;
+			d) HOMEDIRECTORY="$OPTARG";;
+			s) LOGINSHELL="$OPTARG";;
+			c) COMMENT="$OPTARG";;
+			m) CREATEHOMEDIR="yes";;
+			k) SKEL="$OPTARG";;
+			f) SHADOWINACTIVE="$OPTARG";;
+			e) SHADOWEXPIRE="$OPTARG";;
+			p) USERPASSWORD="$OPTARG";;
+			*) exit 1;;
 		esac
 	done
+	shift $(($OPTIND - 1))
 	if [ "$#" -ne 1 ]; then
 		print_usage
 		exit 2
@@ -240,6 +251,13 @@ useradd () {
 			fi
 		done
 	fi
+	if [ -n "$HOSTLIST" ]; then
+		HOSTLIST="$(echo "$HOSTLIST" | sed "s/,/ /")"
+		for HOST in $HOSTLIST; do
+			HOSTS="${HOSTS}host: $HOST\n"
+		done
+		HOSTS="$(echo -e "$HOSTS")"
+	fi
 	[ -z "$HOMEDIRECTORY" ] && HOMEDIRECTORY="$HOMEBASE/$LOGIN"
 	echo "$HOMEDIRECTORY" | grep -qs "^/"
 	if [ "$?" -ne 0 ]; then
@@ -303,6 +321,7 @@ shadowMin: $SHADOWMIN
 shadowMax: $SHADOWMAX
 shadowWarning: $SHADOWWARNING
 shadowFlag: $SHADOWFLAG
+$HOSTS
 EOF
 	) | $LDAPADD > /dev/null
 	if [ -n "$ADDTOGROUPS" ]; then
@@ -315,7 +334,7 @@ EOF
 		done
 		echo -e "$COMMAND" | $LDAPMODIFY > /dev/null
 	fi
-	if [ "$CREATEHOMEDIR" = "yes" ]; then
+	if [ "$CREATEHOMEDIR" = "yes" -a ! -d "$HOMEDIRECTORY" ]; then
 		mkdir $HOMEDIRECTORY
 		cp -a $SKEL/{*,.[^.]*} $HOMEDIRECTORY > /dev/null 2>&1
 		chmod "$HOMEPERM" "$HOMEDIRECTORY"
@@ -328,29 +347,27 @@ usermod () {
 		echo "usermod: No flags given"
 		exit 2
 	fi
-	TEMP="$(getopt -o u:og:G:d:s:c:l:mf:e:p:LU -n usermod -- "$@")"
-	[ "$?" -ne 0 ] && exit 1
-	eval set -- "$TEMP"
-	while true; do
-		case "$1" in
-			-u) UIDNUMBER="$2"; shift 2;;
-			-o) DUPLICATES="yes"; shift;;
-			-g) GID="$2"; shift 2;;
-			-G) OTHERGROUPS="$2"; shift 2;;
-			-d) HOMEDIRECTORY="$2"; shift 2;;
-			-s) LOGINSHELL="$2"; shift 2;;
-			-c) COMMENT="$2"; shift 2;;
-			-l) NEWLOGIN="$2"; shift 2;;
-			-m) MOVEHOMEDIR="yes"; shift;;
-			-f) SHADOWINACTIVE="$2"; shift 2;;
-			-e) SHADOWEXPIRE="$2"; shift 2;;
-			-p) if [ -n "$LOCKED" ]; then print_usage; exit 2; fi; USERPASSWORD="$2"; shift 2;;
-			-L) if [ -n "$LOCKED" -o -n "$USERPASSWORD" ]; then print_usage; exit 2; fi; LOCKED="yes"; shift;;
-			-U) if [ -n "$LOCKED" -o -n "$USERPASSWORD" ]; then print_usage; exit 2; fi; LOCKED="no"; shift;;
-			--) shift; break;;
-			*) echo "Internal error!"; exit 1;;
+	while getopts "u:og:G:h:d:s:c:l:mf:e:p:LU" OPTION; do
+		case "$OPTION" in
+			u) UIDNUMBER="$OPTARG";;
+			o) DUPLICATES="yes";;
+			g) GID="$OPTARG";;
+			G) OTHERGROUPS="$OPTARG";;
+			h) HOSTLIST="$OPTARG";;
+			d) HOMEDIRECTORY="$OPTARG";;
+			s) LOGINSHELL="$OPTARG";;
+			c) COMMENT="$OPTARG";;
+			l) NEWLOGIN="$OPTARG";;
+			m) MOVEHOMEDIR="yes";;
+			f) SHADOWINACTIVE="$OPTARG";;
+			e) SHADOWEXPIRE="$OPTARG";;
+			p) if [ -n "$LOCKED" ]; then print_usage; exit 2; fi; USERPASSWORD="$2";;
+			L) if [ -n "$LOCKED" -o -n "$USERPASSWORD" ]; then print_usage; exit 2; fi; LOCKED="yes";;
+			U) if [ -n "$LOCKED" -o -n "$USERPASSWORD" ]; then print_usage; exit 2; fi; LOCKED="no";;
+			*) exit 1;;
 		esac
 	done
+	shift $(($OPTIND - 1))
 	if [ "$#" -ne 1 ]; then
 		print_usage
 		exit 2
@@ -385,10 +402,10 @@ usermod () {
 				exit 6
 			fi
 		fi
-	fi
-	search_group "gidNumber" "$GIDNUMBER"
-	if [ "$?" -ne 0 ]; then
-		echo "useradd: Warning! Group $GIDNUMBER not found. Adding user anyway."
+		search_group "gidNumber" "$GIDNUMBER"
+		if [ "$?" -ne 0 ]; then
+			echo "useradd: Warning! Group $GIDNUMBER not found. Modifying user anyway."
+		fi
 	fi
 	if [ -n "$OTHERGROUPS" ]; then
 		OTHERGROUPS="$(echo "$OTHERGROUPS" | sed "s/,/ /")"
@@ -413,6 +430,13 @@ usermod () {
 				ADDTOGROUPS="$ADDTOGROUPS $POSIXGROUP"
 			fi
 		done
+	fi
+	if [ -n "$HOSTLIST" ]; then
+		HOSTLIST="$(echo "$HOSTLIST" | sed "s/,/ /")"
+		for HOST in $HOSTLIST; do
+			HOSTS="${HOSTS}host: $HOST\n"
+		done
+		HOSTS="$(echo -e "$HOSTS")"
 	fi
 	if [ -n "$HOMEDIRECTORY" ]; then
 		echo "$HOMEDIRECTORY" | grep -qs "^/"
@@ -489,14 +513,15 @@ usermod () {
 		fi
 	fi
 	COMMAND="dn: uid=$LOGIN,$USERBASE\n"
-	[ -n "$UIDNUMBER" ] && COMMAND="${COMMAND}replace: uidNumber\nuidNumber: $UIDNUMBER\n"
-	[ -n "$GIDNUMBER" ] && COMMAND="${COMMAND}replace: gidNumber\ngidNumber: $GIDNUMBER\n"
-	[ -n "$HOMEDIRECTORY" ] && COMMAND="${COMMAND}replace: homeDirectory\nhomeDirectory: $HOMEDIRECTORY\n"
-	[ -n "$LOGINSHELL" ] && COMMAND="${COMMAND}replace: loginShell\nloginShell: $LOGINSHELL\n"
-	[ -n "$COMMENT" ] && COMMAND="${COMMAND}replace: cn\ncn: $COMMENT\n"
-	[ -n "$SHADOWINACTIVE" ] && COMMAND="${COMMAND}replace: shadowInactive\nshadowInactive: $SHADOWINACTIVE\n"
-	[ -n "$SHADOWEXPIRE" ] && COMMAND="${COMMAND}replace: shadowExpire\nshadowExpire: $SHADOWEXPIRE\n"
-	[ -n "$USERPASSWORD" ] && COMMAND="${COMMAND}replace: userPassword\nuserPassword: $USERPASSWORD\n"
+	[ -n "$UIDNUMBER" ] && COMMAND="${COMMAND}replace: uidNumber\nuidNumber: $UIDNUMBER\n-\n"
+	[ -n "$GIDNUMBER" ] && COMMAND="${COMMAND}replace: gidNumber\ngidNumber: $GIDNUMBER\n-\n"
+	[ -n "$HOSTS" ] && COMMAND="${COMMAND}replace: host\n$HOSTS\n-\n"
+	[ -n "$HOMEDIRECTORY" ] && COMMAND="${COMMAND}replace: homeDirectory\nhomeDirectory: $HOMEDIRECTORY\n-\n"
+	[ -n "$LOGINSHELL" ] && COMMAND="${COMMAND}replace: loginShell\nloginShell: $LOGINSHELL\n-\n"
+	[ -n "$COMMENT" ] && COMMAND="${COMMAND}replace: cn\ncn: $COMMENT\n-\n"
+	[ -n "$SHADOWINACTIVE" ] && COMMAND="${COMMAND}replace: shadowInactive\nshadowInactive: $SHADOWINACTIVE\n-\n"
+	[ -n "$SHADOWEXPIRE" ] && COMMAND="${COMMAND}replace: shadowExpire\nshadowExpire: $SHADOWEXPIRE\n-\n"
+	[ -n "$USERPASSWORD" ] && COMMAND="${COMMAND}replace: userPassword\nuserPassword: $USERPASSWORD\n-\n"
 	[ "$COMMAND" = "dn: uid=$LOGIN,$USERBASE\n" ] && unset COMMAND
 	[ -n "$NEWLOGIN" ] && COMMAND="${COMMAND}\ndn: uid=$LOGIN,$USERBASE\nchangetype: modrdn\nnewrdn: uid=$NEWLOGIN\n"
 	if [ -n "$ADDTOGROUPS" ]; then
@@ -518,16 +543,13 @@ usermod () {
 }
 
 userdel () {
-	TEMP="$(getopt -o r -n userdel -- "$@")"
-	[ "$?" -ne 0 ] && exit 1
-	eval set -- "$TEMP"
-	while true; do
-		case "$1" in
-			-r) REMOVEHOMEDIR="yes"; shift;;
-			--) shift; break;;
-			*) echo "Internal error!"; exit 1;;
+	while getopts "r" OPTION; do
+		case "$OPTION" in
+			r) REMOVEHOMEDIR="yes";;
+			*) exit 1;;
 		esac
 	done
+	shift $(($OPTIND - 1))
 	if [ "$#" -ne 1 ]; then
 		print_usage
 		exit 2
@@ -541,12 +563,15 @@ userdel () {
 	fi
 	if [ "$REMOVEHOMEDIR" = "yes" ]; then
 		if [ "$(whoami)" != "root" ]; then
-			echo "useradd: Only root may remove home directories"
+			echo "userdel: Only root may remove home directories"
 			exit 12
 		fi
 		HOMEDIRECTORY="$($LDAPSEARCH -b "$USERBASE" "uid=$LOGIN" |
 			grep "^homeDirectory:" |
 			sed "s/^homeDirectory: //")"
+		UIDNUMBER="$($LDAPSEARCH -b "$USERBASE" "uid=$LOGIN" |
+			grep "^uidNumber:" |
+			sed "s/^uidNumber: //")"
 	fi
 	COMMAND="dn: uid=$LOGIN,$USERBASE\nchangetype: delete\n"
 	DELETEFROMGROUPS="$($LDAPSEARCH -b "$GROUPBASE" "memberUid=$LOGIN" | grep "^cn:" | sed "s/^cn: //")"
@@ -554,21 +579,28 @@ userdel () {
 		COMMAND="$COMMAND\ndn: cn=$POSIXGROUP,$GROUPBASE\ndelete: memberUid\nmemberUid: $LOGIN\n"
 	done
 	echo -e "$COMMAND" | $LDAPMODIFY > /dev/null
-	[ "$REMOVEHOMEDIR" = "yes" ] && rm -rf "$HOMEDIRECTORY"
+	if [ "$REMOVEHOMEDIR" = "yes" -a -d "$HOMEDIRECTORY" ]; then
+		OWNER_UIDNUMBER="$(stat "$HOMEDIRECTORY" |
+			grep "Uid:" |
+			sed "s/^.*Uid:.*(\(.*\)\/.*Gid:.*$/\1/" | tr -d " ")"
+		if [ "$UIDNUMBER" -eq "$OWNER_UIDNUMBER" ]; then
+			rm -rf "$HOMEDIRECTORY"
+		else
+			echo "userdel: $HOMEDIRECTORY not owned by user \"$LOGIN\", not removing"
+			exit 12
+		fi
+	fi
 }
 
 groupadd () {
-	TEMP="$(getopt -o g:o -n groupadd -- "$@")"
-	[ "$?" -ne 0 ] && exit 1
-	eval set -- "$TEMP"
-	while true; do
-		case "$1" in
-			-g) GIDNUMBER="$2"; shift 2;;
-			-o) DUPLICATES="yes"; shift;;
-			--) shift; break;;
-			*) echo "Internal error!"; exit 1;;
+	while getopts "g:o" OPTION; do
+		case "$OPTION" in
+			g) GIDNUMBER="$OPTARG";;
+			o) DUPLICATES="yes";;
+			*) exit 1;;
 		esac
 	done
+	shift $(($OPTIND - 1))
 	if [ "$#" -ne 1 ]; then
 		print_usage
 		exit 2
@@ -621,18 +653,15 @@ groupmod () {
 		echo "groupmod: No flags given"
 		exit 2
 	fi
-	TEMP="$(getopt -o g:on: -n groupmod -- "$@")"
-	[ "$?" -ne 0 ] && exit 1
-	eval set -- "$TEMP"
-	while true; do
-		case "$1" in
-			-g) GIDNUMBER="$2"; shift 2;;
-			-o) DUPLICATES="yes"; shift;;
-			-n) NEWCN="$2"; shift 2;;
-			--) shift; break;;
-			*) echo "Internal error!"; exit 1;;
+	while getopts "g:on:" OPTION; do
+		case "$OPTION" in
+			g) GIDNUMBER="$OPTARG";;
+			o) DUPLICATES="yes";;
+			n) NEWCN="$OPTARG";;
+			*) exit 1;;
 		esac
 	done
+	shift $(($OPTIND - 1))
 	if [ "$#" -ne 1 ]; then
 		print_usage
 		exit 2
@@ -694,6 +723,14 @@ case "$1" in
 		ACTION="$1"
 		shift 1
 		$ACTION "$@"
+		;;
+	--version)
+		print_version
+		exit 0
+		;;
+	--help)
+		print_usage
+		exit 0
 		;;
 	*)
 		print_usage

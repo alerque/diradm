@@ -32,14 +32,18 @@ useradd/usermod/userdel and groupadd/groupmod/groupdel, you are ready to
 use diradm. Its first command line parameter tells it which operation to
 perform, taking exactly the same options as its "flat file equivalent".
 E.g. "diradm useradd -m -c "Testuser" -g group1 -G group2,group3 testusr"
-For further information on command line options please take a look at the
-man pages of useradd/usermod/userdel and groupadd/groupmod/groupdel.
+For further information on these command line options please take a look
+at the man pages of useradd/usermod/userdel & groupadd/groupmod/groupdel.
+
+The only additional parameter in comparison to the traditional password
+tools is "-h", which you can use to set the "host" attribute of a user.
+This attribute can be used by pam_ldap to determine wether the user has
+access to the system. The usage is the same as for "-G" (groups).
 
 
 Bug reports
 -----------
 
-diradm has been written within 12 hours, so it's likely to contain bugs.
 If you should find a bug, please send a report to <dan@hits.at>.
 
 
