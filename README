@@ -1,0 +1,63 @@
+DIRADM README
+=============
+
+What is diradm?
+---------------
+
+diradm is a simple bash script for managing posix users and groups stored
+in a LDAP directory, offering the same features as the traditional passwd
+file utilities useradd/usermod/userdel and groupadd/groupmod/groupdel.
+It uses the utils ldapsearch, ldapadd, ldapmodify and ldapdelete from the
+OpenLDAP project (http://www.openldap.org/) to perform the needed queries
+against the LDAP database.
+
+
+Installation
+------------
+
+Just copy the script itself (diradm) to a location you want it to reside
+(usually /usr/local/sbin or somewhere else within your path), then take a
+look at the configuration file (diradm.conf), adjust it to your needs and
+copy it to an appropriate location as well.
+By default diradm will search for its config at /etc/diradm.conf, but its
+behaviour can be changed by editing the script and adjusting the variable
+CONFIG.
+
+
+How do I use it?
+----------------
+
+If you know the usage of the traditional password file maintainance tools
+useradd/usermod/userdel and groupadd/groupmod/groupdel, you are ready to
+use diradm. Its first command line parameter tells it which operation to
+perform, taking exactly the same options as its "flat file equivalent".
+E.g. "diradm useradd -m -c "Testuser" -g group1 -G group2,group3 testusr"
+For further information on command line options please take a look at the
+man pages of useradd/usermod/userdel and groupadd/groupmod/groupdel.
+
+
+Bug reports
+-----------
+
+diradm has been written within 12 hours, so it's likely to contain bugs.
+If you should find a bug, please send a report to <dan@hits.at>.
+
+
+Copyright
+---------
+
+Copyright (C) 2003 Daniel Himler <dan@hits.at>
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
