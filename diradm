@@ -5,9 +5,9 @@
 # diradm:	A tool for managing posix users and groups in a LDAP directory.
 #		It uses ldap[add|modify|delete] from the OpenLDAP project.
 #
-# Version:	1.2
+# Version:	1.3
 #
-# Copyright (C) 2003  Daniel Himler  <dan@hits.at>
+# Copyright (C) 2003-2004  Daniel Himler  <dan@hits.at>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -29,7 +29,7 @@ CONFIG="/etc/diradm.conf"
 
 ##################### Don't touch anything below this line #####################
 
-VERSION="1.2"
+VERSION="1.3"
 
 if [ ! -r "$CONFIG" ]; then
 	echo "Unable to open configuration file \"$CONFIG\"!"
@@ -138,7 +138,7 @@ print_usage () {
 
 print_version () {
 	echo "diradm $VERSION"
-	echo "Copyright (C) 2003 Daniel Himler <dan@hits.at>"
+	echo "Copyright (C) 2003-2004 Daniel Himler <dan@hits.at>"
 	echo "This is free software; see the source for copying conditions.  There is NO"
 	echo "warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE."
 }
@@ -180,7 +180,7 @@ useradd () {
 	else
 		LOGIN="$1"
 	fi
-	echo "$LOGIN" | grep -qs "^[[:alnum:]]*$"
+	echo "$LOGIN" | grep -qs "^[[:alnum:]_\-]*$"
 	if [ "$?" -ne 0 ]; then
 		echo "useradd: Invalid user name \"$LOGIN\""
 		exit 3
@@ -263,7 +263,7 @@ useradd () {
 		fi
 	fi
 	if [ -n "$OTHERGROUPS" ]; then
-		OTHERGROUPS="$(echo "$OTHERGROUPS" | sed "s/,/ /")"
+		OTHERGROUPS="$(echo "$OTHERGROUPS" | sed "s/,/ /g")"
 		for POSIXGROUP in $OTHERGROUPS; do
 			echo "$POSIXGROUP" | grep -qs "^[[:digit:]]*$"
 			if [ "$?" -eq 0 ]; then
@@ -287,7 +287,7 @@ useradd () {
 		done
 	fi
 	if [ -n "$HOSTLIST" ]; then
-		HOSTLIST="$(echo "$HOSTLIST" | sed "s/,/ /")"
+		HOSTLIST="$(echo "$HOSTLIST" | sed "s/,/ /g")"
 		for HOST in $HOSTLIST; do
 			HOSTS="${HOSTS}host: $HOST\n"
 		done
@@ -450,7 +450,7 @@ usermod () {
 		fi
 	fi
 	if [ -n "$OTHERGROUPS" ]; then
-		OTHERGROUPS="$(echo "$OTHERGROUPS" | sed "s/,/ /")"
+		OTHERGROUPS="$(echo "$OTHERGROUPS" | sed "s/,/ /g")"
 		for POSIXGROUP in $OTHERGROUPS; do
 			echo "$POSIXGROUP" | grep -qs "^[[:digit:]]*$"
 			if [ "$?" -eq 0 ]; then
@@ -474,7 +474,7 @@ usermod () {
 		done
 	fi
 	if [ -n "$HOSTLIST" ]; then
-		HOSTLIST="$(echo "$HOSTLIST" | sed "s/,/ /")"
+		HOSTLIST="$(echo "$HOSTLIST" | sed "s/,/ /g")"
 		for HOST in $HOSTLIST; do
 			HOSTS="${HOSTS}host: $HOST\n"
 		done
@@ -495,7 +495,7 @@ usermod () {
 		fi
 	fi
 	if [ -n "$NEWLOGIN" ]; then
-		echo "$NEWLOGIN" | grep -qs "^[[:alnum:]]*$"
+		echo "$NEWLOGIN" | grep -qs "^[[:alnum:]_\-]*$"
 		if [ "$?" -ne 0 ]; then
 			echo "usermod: Invalid user name \"$NEWLOGIN\""
 			exit 3
@@ -660,7 +660,7 @@ groupadd () {
 	else
 		CN="$1"
 	fi
-	echo "$CN" | grep -qs "^[[:alnum:]]*$"
+	echo "$CN" | grep -qs "^[[:alnum:]_\-]*$"
 	if [ "$?" -ne 0 ]; then
 		echo "groupadd: \"$CN\" is not a valid group name"
 		exit 3
@@ -743,7 +743,7 @@ groupmod () {
 		fi
 	fi
 	if [ -n "$NEWCN" ]; then
-		echo "$NEWCN" | grep -qs "^[[:alnum:]]*$"
+		echo "$NEWCN" | grep -qs "^[[:alnum:]_\-]*$"
 		if [ "$?" -ne 0 ]; then
 			echo "groupmod: \"$NEWCN\" is not a valid group name"
 			exit 3

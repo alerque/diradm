@@ -1,6 +1,17 @@
 DIRADM CHANGES
 ==============
 
+2004-12-12  Nathaniel L. Budin  <natb@brandeis.edu>
+
+	* Fix parsing of hosts (using "-h" option) and supplementary groups
+	  (using "-G" option) for useradd and usermod.
+
+	* Updated version number to 1.3.
+
+2004-12-12  Benoit Dolez  <bdolez@exosec.fr>
+
+	* diradm now allows the use of "-" and "_" characters in login name.
+
 2003-07-14  Daniel Himler  <dan@hits.at>
 
 	* Added the useradd specific variable USERGROUPS to the config file,
