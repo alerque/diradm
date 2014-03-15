@@ -350,7 +350,7 @@ uidNumber: $UIDNUMBER
 gidNumber: $GIDNUMBER
 cn: $COMMENT
 sn: $COMMENT
-email: $LOGIN@$EMAIL_DOMAIN
+mail: $LOGIN@$EMAIL_DOMAIN
 homeDirectory: $HOMEDIRECTORY
 loginShell: $LOGINSHELL
 shadowLastChange: 0
